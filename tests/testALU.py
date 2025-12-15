@@ -1,5 +1,5 @@
 import py4hw
-from alu import Alu
+from description.alu import Alu
 hw = py4hw.HWSystem()
 
 def sim_bypass(a:int):
