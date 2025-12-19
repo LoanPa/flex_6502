@@ -3,7 +3,7 @@ import py4hw
 class Datapath(py4hw.Logic):
     def __init__(self, parent, name,
                  bus_data:py4hw.Wire,
-                 pc_inc:py4hw.Wire,
+                 pc_inc:py4hw.Wire, ld_pc2mar:py4hw.Wire,
                  enable_sel:py4hw.Wire, write:py4hw.Wire,
                  reg_sel_a:py4hw.Wire, reg_sel_b:py4hw.Wire,
                  output_a:py4hw.Wire, output_b:py4hw.Wire,
@@ -18,6 +18,7 @@ class Datapath(py4hw.Logic):
         # Només hi ha una entrada al bus, ja que no hi ha massa oportunitats per a fer-ne servir dues alhora.
         self.addIn("bus_data",        bus_data)
         self.addIn("pc_inc",            pc_inc)
+        self.addIn("ld_pc2mar",  ld_pc2mar)
         self.addIn("enable_sel",    enable_sel)
         self.addIn("write",              write)
         self.addIn("reg_sel_a",      reg_sel_a)
@@ -25,7 +26,10 @@ class Datapath(py4hw.Logic):
         self.addIn("mbr_src_sel",  mbr_src_sel)
         self.addIn("mm_data_in",    mm_data_in)
         self.addIn("mm_addr_src",  mm_addr_src)
-        self.addIn("flag_in_sel",  flag_in_sel)
+
+        self.addIn("flag_in_sel",  flag_in_sel) #Això s´hauria de canviar per una llista de 6, que passa si volem actualitzar varis flags alhora?
+
+        # Les entrades dels flags es poden agrupar en  wire("flags", 8), el mateix pels enables
         self.addIn("alu_n_in",        alu_n_in)
         self.addIn("alu_v_in",        alu_v_in)
         self.addIn("alu_z_in",        alu_z_in)
@@ -78,14 +82,25 @@ class Datapath(py4hw.Logic):
         pch_incremented = self.wire("pch_inc", 8)
         pch_data =       self.wire("pch_data", 8)
         pch_enable =   self.wire("pch_enable", 1)
+        marl_data =     self.wire("marl_data", 8)
+        marl_enable = self.wire("marl_enable", 1)
+        marh_data =     self.wire("marh_data", 8)
+        marh_enable = self.wire("marh_enable", 1)
         
 
         mbr_input = [bus_data,      mm_data_in]
         pcl_input = [bus_data, pcl_incremented] 
         pch_input = [bus_data, pch_incremented]
+
+        marl_input = [bus_data, tmp_output[PCL]]
+        marh_input = [bus_data, tmp_output[PCH]]
         mm_addr_input = [pc, mar]
+
         py4hw.Or2(self, "pcl_or", enable[PCL], pc_inc, pcl_enable)
         py4hw.Or2(self, "pch_or", enable[PCH], pc_inc, pch_enable)
+
+        py4hw.Or2(self, "marl_or", enable[MARL], ld_pc2mar, marl_enable)
+        py4hw.Or2(self, "marh_or", enable[MARH], ld_pc2mar, marh_enable)
 
 
 
@@ -93,26 +108,31 @@ class Datapath(py4hw.Logic):
         py4hw.Mux(self, "pcl_input_mux", pc_inc, pcl_input, pcl_data)
         py4hw.Mux(self, "pch_input_mux", pc_inc, pch_input, pch_data)
 
+        py4hw.Mux(self, "marl_input_mux", ld_pc2mar, marl_input, marl_data)
+        py4hw.Mux(self, "marh_input_mux", ld_pc2mar, marh_input, marh_data)
+
         py4hw.Constant(self, "one_16_const", 1, one_16)
         py4hw.ConcatenateMSBF(self, "pc_concat", [tmp_output[PCH], tmp_output[PCL]], pc)
         py4hw.ConcatenateMSBF(self, "mar_concat", [tmp_output[MARH], tmp_output[MARL]], mar)
 
         py4hw.Demux(self, "enable_demux", write, enable_sel, enable)
         #assert bus_data.getWidth() == 8
-        py4hw.Reg(self, "A",    bus_data, tmp_output[A],    enable[A]   )
-        py4hw.Reg(self, "X",    bus_data, tmp_output[X],    enable[X]   )
-        py4hw.Reg(self, "Y",    bus_data, tmp_output[Y],    enable[Y]   )
-        py4hw.Reg(self, "SP",   bus_data, tmp_output[SP],   enable[SP]  )
-        py4hw.Reg(self, "MBR",  mbr_data, tmp_output[MBR],  enable[MBR] )
-        py4hw.Reg(self, "PCL",  pcl_data, tmp_output[PCL],  pcl_enable  ) 
-        py4hw.Reg(self, "PCH",  pch_data, tmp_output[PCH],  pch_enable  )
-        py4hw.Reg(self, "MARL", bus_data, tmp_output[MARL], enable[MARL])
-        py4hw.Reg(self, "MARH", bus_data, tmp_output[MARH], enable[MARH])
-        py4hw.Reg(self, "IR",   bus_data, ir_data_out,      enable[IR]  )
+        py4hw.Reg(self, "A",    bus_data, tmp_output[A],     enable[A]  )
+        py4hw.Reg(self, "X",    bus_data, tmp_output[X],     enable[X]  )
+        py4hw.Reg(self, "Y",    bus_data, tmp_output[Y],     enable[Y]  )
+        py4hw.Reg(self, "SP",   bus_data, tmp_output[SP],    enable[SP] )
+        py4hw.Reg(self, "MBR",  mbr_data, tmp_output[MBR],   enable[MBR])
+        py4hw.Reg(self, "PCL",  pcl_data, tmp_output[PCL],   pcl_enable ) 
+        py4hw.Reg(self, "PCH",  pch_data, tmp_output[PCH],   pch_enable )
+        py4hw.Reg(self, "MARL", marl_data, tmp_output[MARL], marl_enable)
+        py4hw.Reg(self, "MARH", marh_data, tmp_output[MARH], marh_enable)
+        py4hw.Reg(self, "IR",   mm_data_in, ir_data_out,      enable[IR])
 
 
         one_1 = self.wire("one_1", 1)
+        one_1_aux = self.wire("one_1_aux", 1)
         py4hw.Constant(self, "one_1_const", 1, one_1)
+        py4hw.Constant(self, "one_1_aux_const", 1, one_1_aux)
 
 
         n_bus = self.wire("n_bus", 1)
@@ -161,7 +181,7 @@ class Datapath(py4hw.Logic):
         py4hw.Reg(self, "C", c_bit, c_out, c_enable)  
 
         py4hw.Buf(self, "alu_c_out_buf", c_out, alu_c_out)
-        py4hw.ConcatenateMSBF(self, "status_concat", [n_out, v_out, one_1, one_1, b_out, i_out, z_out, c_out], tmp_output[CTL])
+        py4hw.ConcatenateMSBF(self, "status_concat", [n_out, v_out, one_1, one_1_aux, b_out, i_out, z_out, c_out], tmp_output[CTL])
 
         py4hw.Buf(self, "mbr_to_mm", tmp_output[MBR], mm_data_out)
         
