@@ -3,11 +3,11 @@ import py4hw
 class Datapath(py4hw.Logic):
     def __init__(self, parent, name,
                  bus_data:py4hw.Wire,
-                 pc_inc:py4hw.Wire, ld_pc2mar:py4hw.Wire,
+                 pc_inc:py4hw.Wire, mbr_enable:py4hw.Wire,
                  enable_sel:py4hw.Wire, write:py4hw.Wire,
                  reg_sel_a:py4hw.Wire, reg_sel_b:py4hw.Wire,
                  output_a:py4hw.Wire, output_b:py4hw.Wire,
-                 mbr_src_sel:py4hw.Wire,
+                 mbr_src_sel:py4hw.Wire, clear_marh:py4hw.Wire,
                  mm_data_in:py4hw.Wire, mm_data_out:py4hw.Wire,
                  mm_addr_src:py4hw.Wire, mm_addr_out:py4hw.Wire,
                  ir_data_out:py4hw.Wire,
@@ -18,16 +18,17 @@ class Datapath(py4hw.Logic):
         # Només hi ha una entrada al bus, ja que no hi ha massa oportunitats per a fer-ne servir dues alhora.
         self.addIn("bus_data",        bus_data)
         self.addIn("pc_inc",            pc_inc)
-        self.addIn("ld_pc2mar",  ld_pc2mar)
+        self.addIn("mbr_enable",    mbr_enable)
         self.addIn("enable_sel",    enable_sel)
         self.addIn("write",              write)
         self.addIn("reg_sel_a",      reg_sel_a)
         self.addIn("reg_sel_b",      reg_sel_b)
         self.addIn("mbr_src_sel",  mbr_src_sel)
+        self.addIn("clear_marh",    clear_marh)
         self.addIn("mm_data_in",    mm_data_in)
         self.addIn("mm_addr_src",  mm_addr_src)
 
-        self.addIn("flag_in_sel",  flag_in_sel) #Això s´hauria de canviar per una llista de 6, que passa si volem actualitzar varis flags alhora?
+        self.addIn("flag_in_sel",  flag_in_sel) # 0 ALU, 1 bus
 
         # Les entrades dels flags es poden agrupar en  wire("flags", 8), el mateix pels enables
         self.addIn("alu_n_in",        alu_n_in)
@@ -73,6 +74,7 @@ class Datapath(py4hw.Logic):
         pc = self.wire("pc", 16)
         mar = self.wire("mar", 16)
         one_16 = self.wire("one_16", 16)
+        zero_8 = self.wire("zero_8", 8)
         pc_incremented = self.wire("pc_incremented", 16)
 
         mbr_data =       self.wire("mbr_data", 8)
@@ -82,36 +84,32 @@ class Datapath(py4hw.Logic):
         pch_incremented = self.wire("pch_inc", 8)
         pch_data =       self.wire("pch_data", 8)
         pch_enable =   self.wire("pch_enable", 1)
-        marl_data =     self.wire("marl_data", 8)
-        marl_enable = self.wire("marl_enable", 1)
-        marh_data =     self.wire("marh_data", 8)
-        marh_enable = self.wire("marh_enable", 1)
         
 
         mbr_input = [bus_data,      mm_data_in]
         pcl_input = [bus_data, pcl_incremented] 
         pch_input = [bus_data, pch_incremented]
 
-        marl_input = [bus_data, tmp_output[PCL]]
-        marh_input = [bus_data, tmp_output[PCH]]
         mm_addr_input = [pc, mar]
 
         py4hw.Or2(self, "pcl_or", enable[PCL], pc_inc, pcl_enable)
         py4hw.Or2(self, "pch_or", enable[PCH], pc_inc, pch_enable)
 
-        py4hw.Or2(self, "marl_or", enable[MARL], ld_pc2mar, marl_enable)
-        py4hw.Or2(self, "marh_or", enable[MARH], ld_pc2mar, marh_enable)
-
-
-
         py4hw.Mux(self, "mbr_input_mux", mbr_src_sel, mbr_input, mbr_data)
         py4hw.Mux(self, "pcl_input_mux", pc_inc, pcl_input, pcl_data)
         py4hw.Mux(self, "pch_input_mux", pc_inc, pch_input, pch_data)
 
-        py4hw.Mux(self, "marl_input_mux", ld_pc2mar, marl_input, marl_data)
-        py4hw.Mux(self, "marh_input_mux", ld_pc2mar, marh_input, marh_data)
-
         py4hw.Constant(self, "one_16_const", 1, one_16)
+        py4hw.Constant(self, "zero_8_const", 0, zero_8)
+
+        marh_input = [bus_data, zero_8]
+        marh_data = self.wire("marh_data", 8)
+        marh_enable = self.wire("marh_final_enable")
+        py4hw.Mux(self, "marh_input_mux", clear_marh, marh_input, marh_data)
+
+        py4hw.Or2(self, "marh_en_or", enable[MARH], clear_marh, marh_enable)
+
+
         py4hw.ConcatenateMSBF(self, "pc_concat", [tmp_output[PCH], tmp_output[PCL]], pc)
         py4hw.ConcatenateMSBF(self, "mar_concat", [tmp_output[MARH], tmp_output[MARL]], mar)
 
@@ -121,10 +119,10 @@ class Datapath(py4hw.Logic):
         py4hw.Reg(self, "X",    bus_data, tmp_output[X],     enable[X]  )
         py4hw.Reg(self, "Y",    bus_data, tmp_output[Y],     enable[Y]  )
         py4hw.Reg(self, "SP",   bus_data, tmp_output[SP],    enable[SP] )
-        py4hw.Reg(self, "MBR",  mbr_data, tmp_output[MBR],   enable[MBR])
+        py4hw.Reg(self, "MBR",  mbr_data, tmp_output[MBR],   mbr_enable )
         py4hw.Reg(self, "PCL",  pcl_data, tmp_output[PCL],   pcl_enable ) 
         py4hw.Reg(self, "PCH",  pch_data, tmp_output[PCH],   pch_enable )
-        py4hw.Reg(self, "MARL", marl_data, tmp_output[MARL], marl_enable)
+        py4hw.Reg(self, "MARL", bus_data, tmp_output[MARL], enable[MARL])
         py4hw.Reg(self, "MARH", marh_data, tmp_output[MARH], marh_enable)
         py4hw.Reg(self, "IR",   mm_data_in, ir_data_out,      enable[IR])
 
@@ -134,7 +132,7 @@ class Datapath(py4hw.Logic):
         py4hw.Constant(self, "one_1_const", 1, one_1)
         py4hw.Constant(self, "one_1_aux_const", 1, one_1_aux)
 
-
+        # Aquí es separen els 8 bits del bus en els flags
         n_bus = self.wire("n_bus", 1)
         v_bus = self.wire("v_bus", 1)
         b_bus = self.wire("b_bus", 1)
@@ -149,22 +147,22 @@ class Datapath(py4hw.Logic):
         py4hw.Bit(self, "z_bit_bus", bus_data, 1, z_bus)
         py4hw.Bit(self, "c_bit_bus", bus_data, 0, c_bus)
         
+        # Per als flags que modifica la ALU es pot actualitzar el valor sense passar pel bus
         n_input = [alu_n_in, n_bus]
         v_input = [alu_v_in, v_bus]
         z_input = [alu_z_in, z_bus]
         c_input = [alu_c_in, c_bus]
-
 
         n_bit = self.wire("n_bit", 1)
         v_bit = self.wire("v_bit", 1)
         z_bit = self.wire("z_bit", 1)
         c_bit = self.wire("c_bit", 1)
 
+        # flag_in_sel permet seleccionar entre dades de la ALU i el bus  
         py4hw.Mux(self,"n_mux", flag_in_sel, n_input, n_bit)
         py4hw.Mux(self,"v_mux", flag_in_sel, v_input, v_bit)
         py4hw.Mux(self,"z_mux", flag_in_sel, z_input, z_bit)
         py4hw.Mux(self,"c_mux", flag_in_sel, c_input, c_bit)
-
 
         n_out = self.wire("n_out", 1)
         v_out = self.wire("v_out", 1)

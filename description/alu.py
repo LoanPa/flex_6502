@@ -30,12 +30,12 @@ class Alu(py4hw.Logic):
             tmp_result.append(self.wire(f"tmp_result_{i}", 8))
 
         # ADD és 001 i SHR 110, utilitzem el primer bit per a diferenciar-les
-        sel_bit_0 = self.wire("sel_bit_0")
-        py4hw.Bit(self, "bit0", op_sel, 0, sel_bit_0)
+        is_shr = self.wire("is_shr")
+        py4hw.Bit(self, "bit0", op_sel, 0, is_shr)
 
         # Amb el tercer bit diferenciem ADD i SUB (001 i 101)
-        sel_bit_2 = self.wire("sel_bit_2")
-        py4hw.Bit(self, "bit2", op_sel, 2, sel_bit_2)
+        is_sub = self.wire("is_sub")
+        py4hw.Bit(self, "bit2", op_sel, 2, is_sub)
 
         # Aquí es declaren els cables per a gestionar el flag negatiu, si es BIT el resultat és diferent
         result_sign = self.wire("result_sign")
@@ -46,7 +46,7 @@ class Alu(py4hw.Logic):
 
         sum_carry = self.wire("sum_carry")
         shift_right_carry = self.wire("shift_right_carry")
-        tmp_sum_carry = self.wire("tmp_sum_carry")
+        #tmp_sum_carry = self.wire("tmp_sum_carry")
         tmp_carry = [shift_right_carry, sum_carry]
 
 
@@ -57,7 +57,13 @@ class Alu(py4hw.Logic):
         # Bypass
         py4hw.Buf(self, "bypass", a, tmp_result[BYP])
         # Add
-        py4hw.Add(self, "add", a, b, tmp_result[ADD], carry_in, tmp_sum_carry)
+        not_b = self.wire("not_b", 8)
+        py4hw.Not(self, "b_negator", b, not_b)
+        tmp_signed_b = [b, not_b]
+        signed_b = self.wire("signed_b", 8)
+        py4hw.Mux(self, "b_mux", is_sub, tmp_signed_b, signed_b)
+        #py4hw.Add(self, "add", a, signed_b, tmp_result[ADD], carry_in, tmp_sum_carry)
+        py4hw.Add(self, "add", a, signed_b, tmp_result[ADD], carry_in, sum_carry)
         # And
         py4hw.And2(self, "and", a, b, tmp_result[AND])
         # Or
@@ -93,8 +99,8 @@ class Alu(py4hw.Logic):
 
         # Carry
         py4hw.Bit(self, "SHR_carry", a, 0, shift_right_carry)
-        py4hw.Xor2(self, "carry_xor", sel_bit_2, tmp_sum_carry, sum_carry)
-        py4hw.Mux(self, "carry_mux", sel_bit_0, tmp_carry, carry_out)
+        #py4hw.Xor2(self, "carry_xor", is_sub, tmp_sum_carry, sum_carry)
+        py4hw.Mux(self, "carry_mux", is_shr, tmp_carry, carry_out)
         
         # Overflow
         py4hw.Bit(self, "BIT_overflow", b, 6, bit_overflow)

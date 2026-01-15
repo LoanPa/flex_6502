@@ -1,5 +1,5 @@
 import py4hw
-from description.alu import Alu
+from description import Alu
 hw = py4hw.HWSystem()
 
 def sim_bypass(a:int):
@@ -78,13 +78,13 @@ def sim_resta(a:int, b:int, c:int) -> dict:
     a &= 0xFF
     b &= 0xFF
     c &= 0x01
-
-    sum = a + b + c
-    r = sum % 256
+    not_b = ~b & 0xFF
+    sub = a + not_b + c
+    r = sub % 256
     result["result"] = r
 
-    carry_out = (sum >> 8) & 0x01
-    result["carry"] = int(not(carry_out))
+    carry_out = (sub >> 8) & 0x01
+    result["carry"] = int(carry_out)
 
     r_sign = (r >> 7) & 1
     result["negative"] = r_sign
@@ -170,7 +170,7 @@ SHR = 6
 BIT = 7  
 
 
-vsel = ADD
+vsel = SUB
     
 csel.value = vsel
 va = 0
@@ -196,7 +196,7 @@ for i in range(256):
             cc.value = vc
 
             hw.getSimulator().clk(1)
-            results = sim_suma(va, vb, vc)
+            results = sim_resta(va, vb, vc)
 
             #print(va, vb, vc,'|', result.get(), negative.get(), results["negative"])
             #print(zero.get(), negative.get(), overflow.get(), carry_out.get())
@@ -204,11 +204,11 @@ for i in range(256):
             #print("va:", va, "vb:", vb, "vc:", vc,"|  ",carry_out.get(), "|", results["carry"])
             #print("va:", va, "vb:", vb, "|  ",zero.get(), "|", results["zero"])
             
-            #assert(result.get() == results["result"])
-            #assert(zero.get() == results["zero"])
-            #assert(negative.get() == results["negative"])
+            assert(result.get() == results["result"])
+            assert(zero.get() == results["zero"])
+            assert(negative.get() == results["negative"])
             assert(overflow.get() == results["overflow"])
-            #assert(carry_out.get() == results["carry"])
+            assert(carry_out.get() == results["carry"])
 
 
 print("Verification test passed!")
